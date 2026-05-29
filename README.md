@@ -9,7 +9,7 @@ Raid Review is a static, browser-based Classic Era World of Warcraft combat log 
 - Sunder Armor and Expose Armor accountability
 - Important cooldown uptime and missing-use checks, including Death Wish, Combustion, Power Infusion, Rapid Fire, Adrenaline Rush, and Blade Flurry
 - Boss debuff uptime, including curses, Faerie Fire, Demoralizing Shout, Thunder Clap, Winter's Chill, Shadow Weaving, and Improved Scorch
-- On-use trinket usage and undead-only trinket warnings
+- On-use trinket usage and undead-only trinket warnings, including caster trinkets such as Restrained Essence of Sapphiron and Hibernation Crystal
 - In-combat consumable usage, including Greater Stoneshield, Mighty Rage Potion, mana potions, and runes
 - Windfury Totem uptime
 - Ignite drop warnings
