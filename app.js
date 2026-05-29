@@ -34,7 +34,9 @@ const DEBUFF_DISPLAY_ORDER = new Map([
 
 const SPELL_NAME_ALIASES = new Map([
   ["Curse of the Elements", "Curse of Elements"],
-  ["Curse of Shadows", "Curse of Shadow"]
+  ["Curse of Shadows", "Curse of Shadow"],
+  ["Mighty Rage", "Mighty Rage Potion"],
+  ["Unstable Power", "Zandalarian Hero Charm"]
 ]);
 
 const MAX_AURA_DURATIONS = new Map([
@@ -60,7 +62,8 @@ const MAX_AURA_DURATIONS = new Map([
   ["Zandalarian Hero Charm", 20],
   ["Zandalarian Hero Medallion", 20],
   ["Zandalarian Hero Badge", 20],
-  ["Greater Stoneshield", 120]
+  ["Greater Stoneshield", 120],
+  ["Mighty Rage Potion", 20]
 ]);
 
 const TRACKED_TRINKETS = new Set([
@@ -83,7 +86,15 @@ const TRACKED_TRINKETS = new Set([
 ]);
 
 const TRACKED_CONSUMABLES = new Set([
-  "Greater Stoneshield"
+  "Greater Stoneshield",
+  "Mighty Rage Potion"
+]);
+
+const TRACKED_USE_CONSUMABLES = new Set([
+  "Dark Rune",
+  "Demon Rune",
+  "Demonic Rune",
+  "Major Mana Potion"
 ]);
 
 const TANK_PHYSICAL_BOSS_ABILITIES = new Set([
@@ -182,6 +193,47 @@ const PRIEST_IDENTIFYING_CASTS = new Set([
   "Shadow Word: Pain"
 ]);
 
+const WARLOCK_IDENTIFYING_CASTS = new Set([
+  "Corruption",
+  "Curse of Agony",
+  "Curse of Doom",
+  "Curse of Elements",
+  "Curse of Recklessness",
+  "Curse of Shadow",
+  "Drain Life",
+  "Life Tap",
+  "Shadow Bolt"
+]);
+
+const DRUID_IDENTIFYING_CASTS = new Set([
+  "Healing Touch",
+  "Innervate",
+  "Moonfire",
+  "Rejuvenation",
+  "Regrowth",
+  "Starfire",
+  "Wrath"
+]);
+
+const PALADIN_IDENTIFYING_CASTS = new Set([
+  "Blessing of Kings",
+  "Blessing of Might",
+  "Blessing of Salvation",
+  "Blessing of Wisdom",
+  "Flash of Light",
+  "Holy Light",
+  "Judgement"
+]);
+
+const SHAMAN_IDENTIFYING_CASTS = new Set([
+  "Chain Heal",
+  "Earth Shock",
+  "Healing Wave",
+  "Lesser Healing Wave",
+  "Lightning Bolt",
+  "Windfury Totem"
+]);
+
 const EXPECTED_CLASS_BUFFS = {
   warrior: ["Death Wish"],
   rogue: ["Adrenaline Rush", "Blade Flurry"],
@@ -189,6 +241,8 @@ const EXPECTED_CLASS_BUFFS = {
   mage: ["Combustion"],
   priest: ["Power Infusion"]
 };
+
+const MANA_USER_CLASSES = ["mage", "priest", "warlock", "druid", "paladin", "shaman"];
 
 const DAMAGE_EVENTS = new Set(["SWING_DAMAGE", "RANGE_DAMAGE", "SPELL_DAMAGE", "SPELL_PERIODIC_DAMAGE", "DAMAGE_SHIELD"]);
 const HEAL_EVENTS = new Set(["SPELL_HEAL", "SPELL_PERIODIC_HEAL"]);
@@ -236,6 +290,7 @@ const els = {
   debuffRows: document.querySelector("#debuffRows"),
   trinketRows: document.querySelector("#trinketRows"),
   consumableRows: document.querySelector("#consumableRows"),
+  windfuryPanel: document.querySelector("#windfuryPanel"),
   windfuryRows: document.querySelector("#windfuryRows"),
   igniteRows: document.querySelector("#igniteRows"),
   igniteHealth: document.querySelector("#igniteHealth"),
@@ -554,7 +609,11 @@ function detectClassPlayers(events, warriors) {
     rogue: new Set(),
     hunter: new Set(),
     mage: new Set(),
-    priest: new Set()
+    priest: new Set(),
+    warlock: new Set(),
+    druid: new Set(),
+    paladin: new Set(),
+    shaman: new Set()
   };
 
   for (const event of events) {
@@ -563,6 +622,10 @@ function detectClassPlayers(events, warriors) {
     if (HUNTER_IDENTIFYING_CASTS.has(event.spellName)) classPlayers.hunter.add(event.sourceName);
     if (MAGE_IDENTIFYING_CASTS.has(event.spellName)) classPlayers.mage.add(event.sourceName);
     if (PRIEST_IDENTIFYING_CASTS.has(event.spellName)) classPlayers.priest.add(event.sourceName);
+    if (WARLOCK_IDENTIFYING_CASTS.has(event.spellName)) classPlayers.warlock.add(event.sourceName);
+    if (DRUID_IDENTIFYING_CASTS.has(event.spellName)) classPlayers.druid.add(event.sourceName);
+    if (PALADIN_IDENTIFYING_CASTS.has(event.spellName)) classPlayers.paladin.add(event.sourceName);
+    if (SHAMAN_IDENTIFYING_CASTS.has(event.spellName)) classPlayers.shaman.add(event.sourceName);
   }
 
   return Object.fromEntries(Object.entries(classPlayers).map(([klass, players]) => [klass, [...players].sort()]));
@@ -611,13 +674,14 @@ function isAuraContextEvent(event) {
 
 function isBossLookbackEvent(event) {
   if (isAuraContextEvent(event)) return true;
+  if (event.event === "SPELL_CAST_SUCCESS" && TRACKED_USE_CONSUMABLES.has(event.spellName) && isPlayerGuid(event.sourceGuid)) return true;
   return event.event === "SPELL_CAST_SUCCESS" && event.spellName === "Windfury Totem" && isPlayerGuid(event.sourceGuid);
 }
 
 function isBossLookbackEventRelevant(event, bossStart) {
   const lookback = event.spellName === "Windfury Totem"
     ? WINDFURY_TOTEM_PREPULL_SECONDS
-    : TRACKED_CONSUMABLES.has(event.spellName) ? BOSS_CONSUMABLE_LOOKBACK_SECONDS : BOSS_AURA_LOOKBACK_SECONDS;
+    : TRACKED_CONSUMABLES.has(event.spellName) || TRACKED_USE_CONSUMABLES.has(event.spellName) ? BOSS_CONSUMABLE_LOOKBACK_SECONDS : BOSS_AURA_LOOKBACK_SECONDS;
   return bossStart - event.time <= lookback;
 }
 
@@ -638,6 +702,7 @@ function analyzeFight(segment, index, warriors, allPlayers = [], classPlayers = 
   const debuffIntervals = new Map();
   const trinketIntervals = new Map();
   const consumableIntervals = new Map();
+  const consumableUses = new Map();
   const activeAuras = new Map();
   const igniteWarnings = [];
   const activeIgnites = new Map();
@@ -695,6 +760,7 @@ function analyzeFight(segment, index, warriors, allPlayers = [], classPlayers = 
       if (event.time >= start) addAmount(casts, event.sourceName, 1);
       addCastActivity(activeCastTime, activeCastStarts, event);
       if (event.spellName === "Windfury Totem") addWindfuryCast(windfuryCasts, event);
+      if (event.time >= start && TRACKED_USE_CONSUMABLES.has(event.spellName)) addConsumableUse(consumableUses, event);
     }
 
     if (event.destName) {
@@ -826,7 +892,7 @@ function analyzeFight(segment, index, warriors, allPlayers = [], classPlayers = 
     buffs: summarizeIntervals(buffIntervals, duration, true, start),
     debuffs: summarizeIntervals(debuffIntervals, duration, false, start),
     trinkets: summarizeTrinkets(trinketIntervals, duration, segment.name, start),
-    consumables: summarizeConsumables(consumableIntervals, duration, start, tankCandidates, warriors),
+    consumables: summarizeConsumables(consumableIntervals, consumableUses, duration, start, tankCandidates, warriors, classPlayers, players, segment.type),
     windfury: summarizeWindfury(windfuryCasts, segment.type === "trash" ? activeDuration : duration, start, end, activeWindows),
     dps: summarizeDamage(damageDone, duration),
     healers: summarizeHealing(healingDone),
@@ -897,6 +963,15 @@ function addWindfuryCast(store, event) {
   record.firstDrop = Math.min(record.firstDrop, event.time);
   record.windows.push({ start: event.time, end: event.time + WINDFURY_TOTEM_DURATION });
   store.set(source, record);
+}
+
+function addConsumableUse(store, event) {
+  if (!isValidPlayerName(event.sourceName)) return;
+  const key = `${event.spellName}|${event.sourceGuid || event.sourceName}`;
+  const record = store.get(key) ?? { spell: event.spellName, target: event.sourceName, targetGuid: event.sourceGuid, uses: 0, times: [] };
+  record.uses += 1;
+  record.times.push(event.time);
+  store.set(key, record);
 }
 
 function summarizeWindfury(store, fightDuration, fightStart, fightEnd, activeWindows = [{ start: fightStart, end: fightEnd }]) {
@@ -1103,18 +1178,29 @@ function summarizeTrinkets(store, fightDuration, fightName, fightStart = 0) {
     .sort((a, b) => Number(Boolean(b.warning)) - Number(Boolean(a.warning)) || b.uptime - a.uptime || a.spell.localeCompare(b.spell));
 }
 
-function summarizeConsumables(store, fightDuration, fightStart = 0, tankCandidates = [], warriors = []) {
+function summarizeConsumables(store, useStore, fightDuration, fightStart = 0, tankCandidates = [], warriors = [], classPlayers = {}, fightPlayers = new Set(), fightType = "boss") {
   const warriorSet = new Set(warriors);
+  const fightPlayerSet = fightPlayers instanceof Set ? fightPlayers : new Set(fightPlayers);
+  const manaUsers = getManaUsers(classPlayers);
   const rows = summarizeIntervals(store, fightDuration, true, fightStart)
-    .filter((row) => warriorSet.has(row.target))
+    .filter((row) => {
+      if (row.spell === "Greater Stoneshield" || row.spell === "Mighty Rage Potion") return warriorSet.has(row.target);
+      return true;
+    })
     .map((row) => ({
       ...row,
-      note: `${row.spell} coverage`,
-      warning: row.uptime < 50 ? "Low mitigation coverage." : ""
+      kind: row.spell === "Mighty Rage Potion" ? "usage" : undefined,
+      uses: row.spell === "Mighty Rage Potion" ? Math.max(1, row.windows?.length ?? 1) : undefined,
+      note: row.spell === "Mighty Rage Potion"
+        ? `${Math.max(1, row.windows?.length ?? 1)} use${Math.max(1, row.windows?.length ?? 1) === 1 ? "" : "s"}; ${formatDuration(row.seconds)} coverage`
+        : `${row.spell} coverage`,
+      warning: row.spell === "Greater Stoneshield" && row.uptime < 50 ? "Low mitigation coverage." : ""
     }));
-  const seen = new Set(rows.map((row) => row.target));
+
+  const stoneshieldSeen = new Set(rows.filter((row) => row.spell === "Greater Stoneshield").map((row) => row.target));
+  const mightyRageSeen = new Set(rows.filter((row) => row.spell === "Mighty Rage Potion").map((row) => row.target));
   for (const tank of tankCandidates) {
-    if (seen.has(tank.name)) continue;
+    if (stoneshieldSeen.has(tank.name)) continue;
     rows.push({
       spell: "Greater Stoneshield",
       target: tank.name,
@@ -1125,7 +1211,57 @@ function summarizeConsumables(store, fightDuration, fightStart = 0, tankCandidat
       warning: `Possible tank took ${tank.total.toLocaleString()} damage with no Greater Stoneshield detected.`
     });
   }
+
+  if (fightType === "boss") {
+    for (const warrior of warriors) {
+      if (!fightPlayerSet.has(warrior) || mightyRageSeen.has(warrior)) continue;
+      rows.push({
+        spell: "Mighty Rage Potion",
+        target: warrior,
+        sources: [],
+        seconds: 0,
+        uptime: 0,
+        windows: [],
+        kind: "usage",
+        uses: 0,
+        warning: "No Mighty Rage Potion detected.",
+        note: "not used"
+      });
+    }
+  }
+
+  rows.push(...summarizeConsumableUses(useStore, fightDuration, fightStart)
+    .filter((row) => manaUsers.has(row.target)));
+
   return rows.sort((a, b) => Number(Boolean(b.warning)) - Number(Boolean(a.warning)) || b.uptime - a.uptime || a.target.localeCompare(b.target));
+}
+
+function getManaUsers(classPlayers = {}) {
+  const names = new Set();
+  for (const klass of MANA_USER_CLASSES) {
+    for (const player of classPlayers[klass] ?? []) names.add(player);
+  }
+  return names;
+}
+
+function summarizeConsumableUses(store, fightDuration, fightStart = 0) {
+  return [...store.values()].map((record) => ({
+    spell: record.spell,
+    target: record.target,
+    targetGuid: record.targetGuid,
+    sources: [],
+    seconds: 0,
+    uptime: record.uses,
+    windows: record.times.map((time) => {
+      const left = ((Math.max(0, Math.min(fightDuration, time - fightStart))) / fightDuration) * 100;
+      return { left, width: 1.25 };
+    }),
+    lostSeconds: 0,
+    friendly: true,
+    kind: "usage",
+    uses: record.uses,
+    note: `${record.uses} use${record.uses === 1 ? "" : "s"}`
+  }));
 }
 
 function renderFightOptions() {
@@ -1160,7 +1296,7 @@ function render() {
   renderMetrics(els.debuffRows, getBossPressureRows(fight), "No tracked enemy debuff windows found.");
   renderTrinkets(fight);
   renderConsumables(fight);
-  renderMetrics(els.windfuryRows, fight.windfury, "No Windfury Totem casts found.");
+  renderWindfury(fight);
   renderIgnite(fight);
   renderDeaths(fight);
   renderLowActivity(fight);
@@ -1403,7 +1539,17 @@ function renderTrinkets(fight) {
 }
 
 function renderConsumables(fight) {
-  renderMetricGroups(els.consumableRows, fight.consumables, "No Greater Stoneshield usage found.", "active");
+  renderMetricGroups(els.consumableRows, fight.consumables, "No tracked consumable usage found.", "active");
+}
+
+function renderWindfury(fight) {
+  const hasShaman = (fight.classPlayers?.shaman?.length ?? 0) > 0;
+  els.windfuryPanel.hidden = !hasShaman;
+  if (!hasShaman) {
+    els.windfuryRows.innerHTML = "";
+    return;
+  }
+  renderMetrics(els.windfuryRows, fight.windfury, "No Windfury Totem casts found.");
 }
 
 function renderMetricGroups(container, rows, emptyText, stateLabel) {
@@ -1428,14 +1574,18 @@ function renderMetricGroups(container, rows, emptyText, stateLabel) {
 }
 
 function renderMetricRow(row, stateLabel) {
+  const value = row.kind === "usage" ? `${row.uses ?? 0}x` : `${Math.round(row.uptime)}%`;
+  const meta = row.kind === "usage"
+    ? row.note
+    : `${formatDuration(row.seconds)} ${row.note || stateLabel}`;
   return `
     <article class="metric ${row.warning ? "metric--warn" : ""}">
       <div class="metric__top">
         <span class="metric__title">${escapeHtml(row.target)}</span>
-        <strong>${Math.round(row.uptime)}%</strong>
+        <strong>${escapeHtml(value)}</strong>
       </div>
       ${renderTimelineBar(row)}
-      <p class="metric__meta">${formatDuration(row.seconds)} ${row.note || stateLabel}${row.sources.length ? ` - ${escapeHtml(row.sources.join(", "))}` : ""}${row.warning ? `<br>${escapeHtml(row.warning)}` : ""}</p>
+      <p class="metric__meta">${escapeHtml(meta)}${row.sources.length ? ` - ${escapeHtml(row.sources.join(", "))}` : ""}${row.warning ? `<br>${escapeHtml(row.warning)}` : ""}</p>
     </article>
   `;
 }
@@ -1462,6 +1612,9 @@ function shouldOpenMetricGroup(group, index) {
 }
 
 function renderTimelineBar(row) {
+  if (row.kind === "usage" && !row.windows?.length) {
+    return `<div class="bar bar--timeline" aria-hidden="true"></div>`;
+  }
   const windows = row.windows?.length
     ? row.windows
     : [{ left: 0, width: Math.min(100, Math.max(1, row.uptime)) }];
