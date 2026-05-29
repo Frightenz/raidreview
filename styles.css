@@ -317,6 +317,29 @@ select:hover {
   font-size: 1.1rem;
 }
 
+.panel__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.officer-summary textarea {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  padding: 16px 18px;
+  color: var(--text);
+  background: #111518;
+  border: 0;
+  border-top: 1px solid var(--line);
+  resize: vertical;
+  font: 0.92rem/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.officer-summary textarea::placeholder {
+  color: var(--quiet);
+}
+
 .pill {
   flex: 0 0 auto;
   padding: 6px 10px;
