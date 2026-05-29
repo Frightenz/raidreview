@@ -10,7 +10,7 @@ Raid Review is a static, browser-based Classic Era World of Warcraft combat log 
 - Important cooldown uptime and missing-use checks, including Death Wish, Combustion, Power Infusion, Rapid Fire, Adrenaline Rush, and Blade Flurry
 - Boss debuff uptime, including curses, Faerie Fire, Demoralizing Shout, Thunder Clap, Winter's Chill, Shadow Weaving, and Improved Scorch
 - On-use trinket usage and undead-only trinket warnings
-- Greater Stoneshield usage for likely warrior tanks
+- In-combat consumable usage, including Greater Stoneshield, Mighty Rage Potion, mana potions, and runes
 - Windfury Totem uptime
 - Ignite drop warnings
 - Player death reviews
@@ -71,4 +71,3 @@ https://your-username.github.io/your-repository-name/
 - Upload the raw WoW combat log from the WoW `Logs` folder, not copied chat text.
 - Very large logs may take a little time to parse because all work happens client-side.
 - Current analysis is focused on Classic Era raid leadership review, especially Naxx-style officer questions.
-
