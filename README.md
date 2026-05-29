@@ -14,7 +14,7 @@ Raid Review is a static, browser-based Classic Era World of Warcraft combat log 
 - Windfury Totem uptime
 - Ignite drop warnings
 - Player death reviews
-- Low activity players by active casting time
+- Low activity players by active time
 
 ## Privacy
 
@@ -48,7 +48,7 @@ http://127.0.0.1:4173/
 2. Add these files to the repository root:
    - `index.html`
    - `styles.css`
-   - `raid-review.js`
+   - `raid-review-20260529-11.js`
    - `assets/`
    - `screenshots/`
    - `README.md`
