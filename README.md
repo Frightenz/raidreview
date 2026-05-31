@@ -48,7 +48,7 @@ http://127.0.0.1:4173/
 2. Add these files to the repository root:
    - `index.html`
    - `styles.css`
-   - `raid-review-20260529-23.js`
+   - `raid-review-20260529-24.js`
    - `assets/`
    - `screenshots/`
    - `README.md`
